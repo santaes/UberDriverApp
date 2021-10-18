@@ -13,22 +13,51 @@
 /* eslint-disable quotes */
 /* eslint-disable no-unused-vars */
 /* eslint-disable prettier/prettier */
-import React from 'react';
+import React,{useEffect} from 'react';
+
 
 import {
   SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
+
 } from 'react-native';
 import HomeScreen from './src/screens/HomeScreen';
+import {PermissionsAndroid, Platform} from 'react-native';
 
 
 
 const App = () => {
+  const androidPermission = async () => {
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        {
+          title: "Uber  App Location Permission",
+          message:
+            "Uber App needs access to your location  ",
+            
+          buttonNeutral: "Ask Me Later",
+          buttonNegative: "Cancel",
+          buttonPositive: "OK",
+        }
+      );
+      if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+        console.log("You can use the location");
+      } else {
+        console.log("Location permission denied");
+      }
+    } catch (err) {
+      console.warn(err);
+    }
+  };
+
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      androidPermission();
+    } else {
+      Geolocation.requestAuthorization();
+    }
+    
+  }, []);
  
 
   return (
