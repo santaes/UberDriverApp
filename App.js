@@ -1,3 +1,4 @@
+/* eslint-disable no-extra-boolean-cast */
 /**
  * Sample React Native App
  * https://github.com/facebook/react-native
@@ -21,11 +22,54 @@ import {
 
 } from 'react-native';
 import HomeScreen from './src/screens/HomeScreen';
-import {PermissionsAndroid, Platform} from 'react-native';
+import {PermissionsAndroid, Platform, Geolocation, } from 'react-native';
+import { withAuthenticator } from 'aws-amplify-react-native';
+
+import Amplify,{Auth, API, graphqlOperation} from 'aws-amplify';
+import {getCarId} from './src/graphql/queries';
+import {createCar} from './src/graphql/mutations';
+
+
+
+import config from './src/aws-exports';
+Amplify.configure(config);
+
 
 
 
 const App = () => {
+
+  useEffect(() => {
+    const updateUserCar = async () => {
+      // Get auth user
+      const authenticatedUser = await Auth.currentAuthenticatedUser({bypassCache:true});
+      if (!authenticatedUser) {
+        return;
+      }
+      // check if already car
+
+      const carData = await API.graphql(graphqlOperation(
+        getCarId,
+        {id: authenticatedUser.attributes.sub}
+      ));
+      if (!!carData.data.getCar) {
+        console.log("user already has a car assigned");
+        return;
+      }
+      // if not , create a new car
+
+      const newCar = {
+        id: authenticatedUser.attributes.sub,
+        type: 'UberX',
+        userId: authenticatedUser.attributes.sub,
+      };
+      await API.graphql(graphqlOperation(createCar,{input: newCar}));
+
+
+    };
+    updateUserCar(); 
+  }, []);
+
   const androidPermission = async () => {
     try {
       const granted = await PermissionsAndroid.request(
@@ -68,4 +112,4 @@ const App = () => {
 };
 
 
-export default App;
+export default withAuthenticator(App);

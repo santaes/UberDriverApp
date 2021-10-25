@@ -41,7 +41,7 @@ const NewOrderPopUp = ({
                     </View>
                     <Text style={styles.uberRating}>
                     <FontAwesome name="star" size={18} color={"#ffffff"} />    
-                       <Text> { newOrder.user.rating } </Text>
+                       <Text> { newOrder.user?.rating } </Text>
                         
                     </Text>
                 </View>

@@ -20,41 +20,102 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import NewOrderPopUp from '../../components/NewOrderPopUp';
 import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
 
+import {API, graphqlOperation, Auth} from 'aws-amplify';
+import { getCar, listOrders } from '../../graphql/queries';
+import {updateCar,updateOrder} from '../../graphql/mutations';
+
+
+
 const HomeScreen = () => {
-    const [isOnline, setIsOnline] = useState(false);
+   
+    const [car, setCar] = useState(null);
     const [myPosition, setMyPosition] = useState(null);
     const [order, setOrder] = useState(null);
-    const [newOrder, setNewOrder] = useState({
-        id: '1',
-        type: 'UberX',
-        originLatitude:28.450027,
-        originLongitude:-16.263845,
+    const [newOrders, setNewOrders] = useState([]);
 
-        destinationLatitude:28.452927,
-        destinationLongitude:-16.260845,
+    const fetchCar = async () => {
+        try {
+            const userData = await Auth.currentAuthenticatedUser();
+            const carData = await API.graphql(graphqlOperation(getCar, {id: userData.attributes.sub}));
+            setCar(carData.data.getCar);
+        } catch (e) {
+            console.error(e);
+        }
+    };
+    const fetchOrders = async () => {
+        try {
+            const ordersData = await API.graphql(graphqlOperation(listOrders,  {filter:{status:{eq:"NEW"}}} ));
+            console.log(ordersData);
+            setNewOrders(ordersData.data.listOrders.items);
+        } catch (e) {
+            console.log(e);
+        }
+    };
 
-        user:{
-            rating: 4.8,
-            name:'Nastyushka',
-        },
-    });
+    useEffect(() => {
+       fetchCar();
+       fetchOrders();
+    }, []);
 
     
     const onDecline = () => {
-        setNewOrder(null);
+
+        console.log(newOrders);
+        setNewOrders(newOrders.toString().slice(1));
     };
-    const onAccept = (newOrder) => {
-        setOrder(newOrder);
-        setNewOrder(null);
+    const onAccept = async (newOrders) => {
+        try {
+            const input = {
+                id: newOrders.id,
+                status: "picking_up",
+                carId: car.id,
+            };
+            const orderData = await API.graphql(
+                graphqlOperation(updateOrder, {input})
+            );
+            setOrder(orderData.data.updateOrder);
+        } catch (e) {
+
+        }
+
+        setOrder(newOrders);
+        setNewOrders(newOrders.toString().slice(1));
     };
 
 
-    const onGo = () => {
-        setIsOnline(!isOnline);
+    const onGo = async () => {
+        
+        try {
+            const userData = await Auth.currentAuthenticatedUser();
+            const input = {
+                id: userData.attributes.sub,
+                isActive: !car.isActive,
+            };
+            const updatedCarData = await API.graphql(graphqlOperation(updateCar, {input}));
+            console.log(updatedCarData.data.updateCar);
+            setCar(updatedCarData.data.updateCar);
+        } catch (e) {
+            console.error(e);
+        }
     };
 
-    const onUserLocationChange = (event) =>{
-        setMyPosition(event.nativeEvent.coordinate);
+    const onUserLocationChange = async (event) => {
+        
+        const {latitude, longitude, heading } = event.nativeEvent.coordinate;
+        try {
+            const userData = await Auth.currentAuthenticatedUser();
+            const input = {
+                id: userData.attributes.sub,
+                latitude,
+                longitude,
+                heading,
+            };
+            const updatedCarData = await API.graphql(graphqlOperation(updateCar,{input}));
+            setCar(updatedCarData.data.updateCar);
+
+        } catch (e) {
+            console.log(e);
+        }
         
     };
 
@@ -63,7 +124,7 @@ const HomeScreen = () => {
         if (order) {
             setOrder({
                 ...order,
-                distance: event.distance,
+                distance: event.distance.toFixed(1),
                 duration: event.duration,
                 pickedUp: order.pickedUp || event.distance < 0.2,
                 isFinished: order.pickedUp && event.distance < 0.2,
@@ -93,11 +154,11 @@ const HomeScreen = () => {
                 <View style={{alignItems:'center',justifyContent:'center'}}>
                     <View style={{flexDirection:'row',alignItems:'center',justifyContent:'center',backgroundColor:'#ff0000', width:200, padding:10, }}>    
                     </View>
-                        <Text style={{color:'#ffffff',fontWeight:'bold',}}>  Complete {order.type}  </Text>
-                    <Text style={styles.bottomText}>{order.user.name}</Text>
+                        <Text style={{color:'#ffffff',fontWeight:'bold'}}>  Complete {order.type}  </Text>
+                    <Text style={styles.bottomText}>{order?.user?.username}</Text>
                 </View>
             
-            )
+            );
         }
 
 
@@ -112,7 +173,7 @@ const HomeScreen = () => {
                     </View>
                         <Text> {order.distance} km </Text>
                     </View>
-                    <Text style={styles.bottomText}>Dropping off {order.user.name}</Text>
+                    <Text style={styles.bottomText}>Dropping off {order?.user?.username}</Text>
                 </View>
             
             );
@@ -130,20 +191,20 @@ const HomeScreen = () => {
                     </View>
                         <Text> { order.distance } km </Text>
                     </View>
-                    <Text style={styles.bottomText}>Picking up {order.user.name}</Text>
+                    <Text style={styles.bottomText}>Picking up {order?.user?.username}</Text>
                 </View>
             
             );
         }
         
         
-        if (isOnline) {
+        if (car?.isActive) {
             return (
-                <Text style={styles.bottomText}>You are offline</Text>
+                <Text style={styles.bottomText}>You are online</Text>
             );
         }
         return (
-               <Text style={styles.bottomText}>You are online</Text>
+            <Text style={styles.bottomText}>You are offline</Text>
         );
                
     };
@@ -169,7 +230,10 @@ const HomeScreen = () => {
                 {order && (
                      <MapViewDirections
                         onReady={onDirectionFound}
-                        origin={myPosition}
+                        origin={{
+                            latitude:car?.latitude,
+                            longitude:car?.longitude,
+                        }}
                         destination={getDestination()}
                         apikey={GOOGLE_MAPS_APIKEY}
                         strokeWidth={5}
@@ -192,7 +256,7 @@ const HomeScreen = () => {
             </Pressable>
             <Pressable onPress={onGo} style={styles.goButton}>
                 <Text style={styles.goText}>
-                    {isOnline ? 'GO' : 'End'}
+                    {car?.isActive ? 'End' : 'GO' }
                 </Text>  
             </Pressable>
             <Pressable onPress={() => console.warn('Balance')} style={styles.balanceButton}>
@@ -208,12 +272,12 @@ const HomeScreen = () => {
                  {renderBottomTitle()}
                 <Ionicons name="menu-outline" size={30} color="#4a4a4a"/>
             </View>  
-            {newOrder && <NewOrderPopUp
-             newOrder={newOrder}
+            {newOrders.length > 0 && !order && <NewOrderPopUp
+             newOrder={newOrders[0]}
              duration= {3}
              distance={0.6}
              onDecline={onDecline}
-             onAccept={() => onAccept(newOrder)}
+             onAccept={() => onAccept(newOrders[0])}
             />} 
         </SafeAreaView>
     );
